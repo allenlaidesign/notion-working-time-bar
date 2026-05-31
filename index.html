@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aesthetic Timer Widget</title>
+    <!-- 引入 JetBrains Mono 等寬字體（僅用於大數字倒數） -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* 實色綠卡主題：使用指定的完美綠色碼 */
+            --bg-body: transparent; 
+            --bg-card: #36a17d; 
+            --text-main: #ffffff; 
+            --text-sub: rgba(255, 255, 255, 0.75); 
+            --bar-bg: rgba(255, 255, 255, 0.2); 
+            --border-color: rgba(255, 255, 255, 0.1);
+            --past-fill: rgba(255, 255, 255, 0.4);
+            /* 當前活躍的階段：發白光 + 流動特效 */
+            --active-fill: linear-gradient(90deg, 
+                rgba(255, 255, 255, 0.3) 0%, 
+                #ffffff 50%, 
+                rgba(255, 255, 255, 0.3) 100%);
+            --glow: 0 0 4px #ffffff, 0 0 8px rgba(255, 255, 255, 0.6), 0 0 14px rgba(255, 255, 255, 0.2);
+        }
+
+        /* 全局基礎字體 */
+        html, body {
+            margin: 0;
+            padding: 12px 24px; 
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+            background-color: var(--bg-body);
+            display: flex;
+            justify-content: center; 
+            align-items: center;     
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* 卡片尺寸與 Padding，向右微調 8px 防止任何陰影與圓角裁切 */
+        .widget-container {
+            background-color: var(--bg-card);
+            border-radius: 16px;
+            padding: 30px 36px 32px; 
+            width: 100%; 
+            max-width: 400px; 
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden; 
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12); 
+            transform: translateX(8px); 
+        }
+
+        /* 右邊的半透明圓形幾何裝飾 */
+        .widget-container::before,
+        .widget-container::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05); 
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .widget-container::before {
+            width: 320px;
+            height: 320px;
+            right: -120px;
+            top: -160px;
+        }
+
+        .widget-container::after {
+            width: 220px;
+            height: 220px;
+            right: -50px;
+            bottom: -100px;
+        }
+
+        .header, .countdown, .timeline-container {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Top Header Area */
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .clock-icon {
+            width: 16px;
+            height: 16px;
+            stroke: var(--text-main); 
+            opacity: 0.9;
+        }
+
+        .title-text {
+            font-size: 0.8rem;
+            color: var(--text-main); 
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* Countdown Numbers */
+        .countdown {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 3.8rem; 
+            font-weight: 500; 
+            color: var(--text-main); 
+            text-align: center;
+            letter-spacing: -2px;
+            margin: 10px 0 22px; 
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        /* Dynamic Timeline Container */
+        .timeline-container {
+            width: 100%;
+        }
+
+        .bars-wrapper {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            height: 8px;
+        }
+
+        .segment {
+            border-radius: 6px;
+            background-color: var(--bar-bg);
+            position: relative;
+            transition: flex 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 狀態控制：活躍長、未開始/已過去短 */
+        .segment.active { flex: 6; } 
+        .segment.future { flex: 1; }
+        .segment.past { flex: 1; }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 6px;
+        }
+
+        .segment.future .progress-fill {
+            background-color: transparent;
+        }
+
+        .segment.past .progress-fill {
+            background-color: var(--past-fill);
+            opacity: 1; 
+            width: 100% !important;
+        }
+
+        /* 當前活躍的階段：套用動態背景與發光 */
+        .segment.active .progress-fill {
+            background: var(--active-fill);
+            background-size: 200% 100%;
+            animation: flowEffect 2.5s linear infinite; 
+            box-shadow: var(--glow);
+        }
+
+        @keyframes flowEffect {
+            0% { background-position: 200% 0; }
+            100% { background-position: 0% 0; }
+        }
+
+        /* 標籤容器 */
+        .labels-wrapper {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .label-seg {
+            text-align: center;
+            font-size: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-sub);
+            white-space: nowrap;
+            overflow: hidden;
+            transition: flex 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s, font-size 0.3s;
+            opacity: 0; 
+        }
+
+        .label-seg.active { 
+            flex: 6; 
+            font-size: 0.8rem; 
+            color: var(--text-main); 
+            font-weight: 700; 
+            opacity: 1; 
+        }
+        .label-seg.future { flex: 1; opacity: 0; }
+        .label-seg.past { flex: 1; opacity: 0; }
+
+        /* 下班 / 非工作時間專屬樣式：隱藏多餘進度條與標籤，並使第一進度條拉滿 */
+        .timeline-container.off-work-mode #seg-1,
+        .timeline-container.off-work-mode #seg-2,
+        .timeline-container.off-work-mode #lbl-1,
+        .timeline-container.off-work-mode #lbl-2 {
+            display: none !important;
+        }
+
+        .timeline-container.off-work-mode #seg-0 {
+            flex: 6 !important;
+        }
+
+        .timeline-container.off-work-mode #lbl-0 {
+            flex: 6 !important;
+            font-size: 0.8rem !important;
+            opacity: 1 !important;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="widget-container" id="widget">
+        <div class="header">
+            <div class="title-group">
+                <svg class="clock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <div class="title-text">
+                    <span id="title">LOADING...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="countdown" id="countdown">--:--:--</div>
+        
+        <div class="timeline-container">
+            <div class="bars-wrapper">
+                <div class="segment" id="seg-0"><div class="progress-fill" id="fill-0"></div></div>
+                <div class="segment" id="seg-1"><div class="progress-fill" id="fill-1"></div></div>
+                <div class="segment" id="seg-2"><div class="progress-fill" id="fill-2"></div></div>
+            </div>
+            <div class="labels-wrapper">
+                <div class="label-seg" id="lbl-0">08:30-12:00</div>
+                <div class="label-seg" id="lbl-1">12:00-14:00</div>
+                <div class="label-seg" id="lbl-2">14:00-17:20</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 定義標準工作時間
+        const t0830 = (8 * 3600000) + (30 * 60000); 
+        const t1200 = (12 * 3600000);
+        const t1400 = (14 * 3600000);
+        const t1720 = (17 * 3600000) + (20 * 60000);
+
+        const segments = [
+            { id: 0, start: t0830, end: t1200, title: "UNTIL LUNCH" },
+            { id: 1, start: t1200, end: t1400, title: "RESUMING IN" },
+            { id: 2, start: t1400, end: t1720, title: "UNTIL OFF WORK" }
+        ];
+
+        function updateTimer() {
+            const now = new Date();
+            const day = now.getDay(); // 0 = 星期日, 1 = 星期一, ..., 5 = 星期五, 6 = 星期六
+            const currentMs = (now.getHours() * 3600000) + (now.getMinutes() * 60000) + (now.getSeconds() * 1000) + now.getMilliseconds();
+
+            // 判斷今日是否為正常工作日 (Mon-Fri) 且處於上班時間內 (08:30 - 17:20)
+            const isWorkday = (day >= 1 && day <= 5);
+            const isWorkHour = isWorkday && (currentMs >= t0830 && currentMs < t1720);
+
+            let targetTime = null;
+            let titleText = "OFF WORK";
+            
+            const timelineContainer = document.querySelector(".timeline-container");
+
+            if (isWorkHour) {
+                // 回復正常的三段式上班 Timeline
+                timelineContainer.classList.remove("off-work-mode");
+
+                // 重建正常標籤
+                document.getElementById("lbl-0").innerText = "08:30-12:00";
+                document.getElementById("lbl-1").innerText = "12:00-14:00";
+                document.getElementById("lbl-2").innerText = "14:00-17:20";
+
+                segments.forEach((seg, index) => {
+                    const bar = document.getElementById(`seg-${index}`);
+                    const label = document.getElementById(`lbl-${index}`);
+                    const fill = document.getElementById(`fill-${index}`);
+
+                    if (currentMs < seg.start) {
+                        bar.className = 'segment future';
+                        label.className = 'label-seg future';
+                        fill.style.width = '0%';
+                    } else if (currentMs >= seg.end) {
+                        bar.className = 'segment past';
+                        label.className = 'label-seg past';
+                        fill.style.width = '100%';
+                    } else {
+                        bar.className = 'segment active';
+                        label.className = 'label-seg active';
+                        
+                        const progress = ((currentMs - seg.start) / (seg.end - seg.start)) * 100;
+                        fill.style.width = progress + '%';
+                        
+                        titleText = seg.title;
+                        
+                        targetTime = new Date();
+                        targetTime.setHours(Math.floor(seg.end / 3600000), Math.floor((seg.end % 3600000) / 60000), 0, 0);
+                    }
+                });
+            } else {
+                // 下班/放假狀態：切換為單一條 Timeline 倒數到次個工作天 08:30
+                timelineContainer.classList.add("off-work-mode");
+
+                // 1. 計算下一個工作天早上 08:30 (Target End)
+                let end = new Date(now);
+                if (isWorkday && currentMs < t0830) {
+                    // 若是今天上班前，倒數終點就是「今天早上 08:30」
+                    end.setHours(8, 30, 0, 0);
+                } else {
+                    // 若是下班後或週末，尋找下一個工作日 (排除六日)
+                    do {
+                        end.setDate(end.getDate() + 1);
+                    } while (end.getDay() === 0 || end.getDay() === 6);
+                    end.setHours(8, 30, 0, 0);
+                }
+
+                // 2. 計算上一個工作天下午 17:20 (Start)
+                let start = new Date(end);
+                do {
+                    start.setDate(start.getDate() - 1);
+                } while (start.getDay() === 0 || start.getDay() === 6);
+                start.setHours(17, 20, 0, 0);
+
+                // 3. 計算並更新單一時間軸進度
+                const totalDuration = end.getTime() - start.getTime();
+                const elapsed = now.getTime() - start.getTime();
+                const progress = Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
+
+                const bar0 = document.getElementById("seg-0");
+                const label0 = document.getElementById("lbl-0");
+                const fill0 = document.getElementById("fill-0");
+
+                bar0.className = 'segment active';
+                label0.className = 'label-seg active';
+                fill0.style.width = Math.min(progress, 100) + '%';
+
+                // 4. 動態顯示下班時間標籤 (如果是週五下班跨週末，顯示 To next Monday)
+                let labelText = "17:20-08:30";
+                if (end.getDay() === 1) {
+                    labelText = "To next Monday";
+                }
+                label0.innerText = labelText;
+
+                titleText = "UNTIL START WORK";
+                targetTime = end;
+            }
+
+            document.getElementById("title").innerText = titleText;
+
+            if (targetTime) {
+                const diff = targetTime - now; 
+                // 移除 % (1000 * 60 * 60 * 24) 的限制，允許顯示超過 24 小時的完整倒數小時
+                const h = Math.floor(diff / (1000 * 60 * 60)); 
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((diff % (1000 * 60)) / 1000);
+                document.getElementById("countdown").innerText = 
+                    String(h).padStart(2, '0') + ":" + 
+                    String(m).padStart(2, '0') + ":" + 
+                    String(s).padStart(2, '0');
+            } else {
+                document.getElementById("countdown").innerText = "--:--:--";
+            }
+        }
+
+        updateTimer();
+        setInterval(updateTimer, 50);
+    </script>
+</body>
+</html>
