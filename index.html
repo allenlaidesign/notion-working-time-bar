@@ -40,7 +40,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
-        /* 卡片尺寸與 Padding，向右微調 8px 防止任何陰影與圓角裁切 */
+        /* 卡片尺寸與 Padding，向右微調 12px 防止左側偏向陰影被裁切 */
         .widget-container {
             background-color: var(--bg-card);
             border-radius: 16px;
@@ -51,8 +51,10 @@
             border: 1px solid var(--border-color);
             position: relative;
             overflow: hidden; 
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12); 
-            transform: translateX(8px); 
+            /* 修正：陰影調淡至 0.08，且 X 軸設為 -6px 讓陰影微微靠左，質感更佳 */
+            box-shadow: -6px 14px 28px rgba(0, 0, 0, 0.08); 
+            /* 修正：配合靠左嘅陰影，將卡片往右推 12px 留出左側安全空間，徹底解決 Crop 圓角問題 */
+            transform: translateX(12px); 
         }
 
         /* 右邊的半透明圓形幾何裝飾 */
@@ -257,23 +259,23 @@
                 <div class="segment" id="seg-2"><div class="progress-fill" id="fill-2"></div></div>
             </div>
             <div class="labels-wrapper">
-                <div class="label-seg" id="lbl-0">08:30-12:00</div>
-                <div class="label-seg" id="lbl-1">12:00-14:00</div>
+                <div class="label-seg" id="lbl-0">08:30-13:00</div>
+                <div class="label-seg" id="lbl-1">13:00-14:00</div>
                 <div class="label-seg" id="lbl-2">14:00-17:20</div>
             </div>
         </div>
     </div>
 
     <script>
-        // 定義標準工作時間
+        // 定義標準工作時間（修正食飯時間為 13:00 - 14:00）
         const t0830 = (8 * 3600000) + (30 * 60000); 
-        const t1200 = (12 * 3600000);
-        const t1400 = (14 * 3600000);
+        const t1300 = (13 * 3600000); // 修正：一點鐘開始食飯
+        const t1400 = (14 * 3600000); // 二點鐘食完放工
         const t1720 = (17 * 3600000) + (20 * 60000);
 
         const segments = [
-            { id: 0, start: t0830, end: t1200, title: "UNTIL LUNCH" },
-            { id: 1, start: t1200, end: t1400, title: "RESUMING IN" },
+            { id: 0, start: t0830, end: t1300, title: "UNTIL LUNCH" },
+            { id: 1, start: t1300, end: t1400, title: "RESUMING IN" },
             { id: 2, start: t1400, end: t1720, title: "UNTIL OFF WORK" }
         ];
 
@@ -296,8 +298,8 @@
                 timelineContainer.classList.remove("off-work-mode");
 
                 // 重建正常標籤
-                document.getElementById("lbl-0").innerText = "08:30-12:00";
-                document.getElementById("lbl-1").innerText = "12:00-14:00";
+                document.getElementById("lbl-0").innerText = "08:30-13:00";
+                document.getElementById("lbl-1").innerText = "13:00-14:00";
                 document.getElementById("lbl-2").innerText = "14:00-17:20";
 
                 segments.forEach((seg, index) => {
